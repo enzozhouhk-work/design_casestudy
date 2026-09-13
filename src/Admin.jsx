@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  LayoutDashboard, FolderOpen, MessageSquare, LogOut,
+  LayoutDashboard, FolderOpen, LogOut,
   Plus, Search, Pencil, Trash2, Upload, X, ChevronRight, CheckCircle
 } from 'lucide-react';
 import { supabase } from './supabase';
@@ -14,10 +14,10 @@ async function uploadImage(file) {
   return publicUrl;
 }
 
+// ✅ 移除 MessageSquare
 const NAV = [
   { id:'dashboard', label:'儀表板',   icon:LayoutDashboard },
   { id:'projects',  label:'案例管理', icon:FolderOpen      },
-  { id:'inquiries', label:'客戶查詢', icon:MessageSquare   },
 ];
 
 const S = {
@@ -36,19 +36,21 @@ const S = {
     color:      c==='green'?'#4ade80':c==='yellow'?'#fb923c':c==='purple'?'#818cf8':'#93c5fd',
   }),
 };
+
+// ✅ LoginPage 不變
 function LoginPage({ onLogin }) {
-  const [pw, setPw]   = useState('');
-  const [err, setErr] = useState('');
+  const [pw, setPw]     = useState('');
+  const [err, setErr]   = useState('');
   const [busy, setBusy] = useState(false);
 
-async function handle(e) {
-  e.preventDefault();
-  setBusy(true); setErr('');
-  if (pw === 'admin123') { onLogin(); }
-  else { setErr('密碼錯誤'); }
-  setBusy(false);
-}
-  
+  async function handle(e) {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    if (pw === 'admin123') { onLogin(); }
+    else { setErr('密碼錯誤'); }
+    setBusy(false);
+  }
+
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#0f172a', color:'#e2e8f0' }}>
       <div style={{ background:'#1e293b', borderRadius:16, padding:36, width:340, border:'1px solid #334155' }}>
@@ -72,12 +74,12 @@ async function handle(e) {
   );
 }
 
-function Dashboard({ projects, inquiries, setView }) {
+// ✅ Dashboard 移除 inquiries
+function Dashboard({ projects, setView }) {
   const stats = [
     { label:'總案例數', value:projects.length,                           color:'#3b82f6' },
     { label:'已發布',   value:projects.filter(p=>p.is_published).length, color:'#22c55e' },
     { label:'精選案例', value:projects.filter(p=>p.is_featured).length,  color:'#f59e0b' },
-    { label:'新查詢',   value:inquiries.filter(i=>!i.is_read).length,    color:'#ec4899' },
   ];
   return (
     <div>
@@ -87,7 +89,7 @@ function Dashboard({ projects, inquiries, setView }) {
           <Plus size={14}/> 新增案例
         </button>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginBottom:24 }}>
         {stats.map(s=>(
           <div key={s.label} style={{ ...S.card, borderLeft:`3px solid ${s.color}` }}>
             <div style={{ fontSize:28, fontWeight:800, color:s.color }}>{s.value}</div>
@@ -182,6 +184,14 @@ function ProjectTable({ projects, compact, onEdit, onDelete, onToggle }) {
             <td style={{ padding:'10px 12px' }}>
               <div style={{ fontWeight:600, fontSize:13 }}>{p.title}</div>
               <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{p.style}</div>
+              {/* ✅ 顯示 Hashtag */}
+              {p.tags?.length > 0 && (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:4 }}>
+                  {p.tags.map((t,i)=>(
+                    <span key={i} style={{ fontSize:10, color:'#60a5fa' }}>#{t}</span>
+                  ))}
+                </div>
+              )}
             </td>
             <td style={{ padding:'10px 12px' }}><span style={S.badge('blue')}>{p.category}</span></td>
             <td style={{ padding:'10px 12px', fontSize:13, color:'#94a3b8' }}>{p.year}</td>
@@ -231,6 +241,11 @@ function ProjectForm({ setView, isEdit, editProject, onSaved }) {
     is_published: isEdit ? editProject.is_published : false,
     is_featured:  isEdit ? editProject.is_featured  : false,
   });
+
+  // ✅ 新增 Hashtag state
+  const [tags,     setTags]     = useState(isEdit ? (editProject.tags || []) : []);
+  const [tagInput, setTagInput] = useState('');
+
   const [existingImages, setExistingImages] = useState([]);
   const [newFiles,       setNewFiles]       = useState([]);
   const [saving,         setSaving]         = useState(false);
@@ -257,11 +272,25 @@ function ProjectForm({ setView, isEdit, editProject, onSaved }) {
     setExistingImages(prev=>prev.filter(i=>i.id!==img.id));
   }
 
+  // ✅ Hashtag 新增／刪除
+  function handleTagKeyDown(e) {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      e.preventDefault();
+      const newTag = tagInput.trim().replace(/^#/, '');
+      if (!tags.includes(newTag)) setTags(prev=>[...prev, newTag]);
+      setTagInput('');
+    }
+  }
+  function removeTag(i) {
+    setTags(prev=>prev.filter((_,j)=>j!==i));
+  }
+
   async function handleSave(draft=false) {
     if (!form.title) { setMsg('請填寫案例名稱'); return; }
     setSaving(true); setMsg('');
     try {
-      const payload = { ...form, is_published: draft ? false : form.is_published };
+      // ✅ tags 加入 payload
+      const payload = { ...form, tags, is_published: draft ? false : form.is_published };
       let pid = isEdit ? editProject.id : null;
 
       if (isEdit) {
@@ -336,10 +365,33 @@ function ProjectForm({ setView, isEdit, editProject, onSaved }) {
                 <input style={S.input} value={form.area} onChange={e=>setF('area',e.target.value)} placeholder="850"/>
               </Field>
             </div>
-            <Field label="案例描述">
-              <textarea style={{ ...S.input, height:100, resize:'vertical' }}
-                value={form.description} onChange={e=>setF('description',e.target.value)}
-                placeholder="描述這個案例的設計理念、特色..."/>
+            <div style={{ marginBottom:16 }}>
+              <Field label="案例描述">
+                <textarea style={{ ...S.input, height:100, resize:'vertical' }}
+                  value={form.description} onChange={e=>setF('description',e.target.value)}
+                  placeholder="描述這個案例的設計理念、特色..."/>
+              </Field>
+            </div>
+
+            {/* ✅ Hashtag 區塊 */}
+            <Field label="Hashtag">
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+                {tags.map((t,i)=>(
+                  <span key={i} style={{ ...S.badge('blue'), cursor:'pointer' }}>
+                    #{t}
+                    <X size={10} style={{ cursor:'pointer' }} onClick={()=>removeTag(i)}/>
+                  </span>
+                ))}
+              </div>
+              <input
+                style={S.input}
+                value={tagInput}
+                onChange={e=>setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+                placeholder="輸入 tag 後按 Enter，例：現代簡約"/>
+              <div style={{ fontSize:11, color:'#475569', marginTop:4 }}>
+                按 Enter 新增，點擊 tag 刪除
+              </div>
             </Field>
           </div>
 
@@ -441,116 +493,30 @@ function ProjectForm({ setView, isEdit, editProject, onSaved }) {
   );
 }
 
-function InquiriesPage({ inquiries, onMarkRead }) {
-  const [selected, setSelected] = useState(null);
-
-  async function handleSelect(inq) {
-    setSelected(inq);
-    if (!inq.is_read) {
-      await supabase.from('contact_submissions').update({ is_read:true }).eq('id', inq.id);
-      onMarkRead(inq.id);
-    }
-  }
-
-  return (
-    <div>
-      <h2 style={{ margin:'0 0 24px', fontSize:20, fontWeight:700 }}>客戶查詢</h2>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 360px', gap:16 }}>
-        <div style={S.card}>
-          {inquiries.length===0 && (
-            <div style={{ color:'#475569', textAlign:'center', padding:'40px 0', fontSize:13 }}>暫無查詢</div>
-          )}
-          {inquiries.map(inq=>(
-            <div key={inq.id} onClick={()=>handleSelect(inq)}
-              style={{ display:'flex', gap:12, padding:'12px 8px', borderBottom:'1px solid #1e293b',
-                cursor:'pointer', alignItems:'flex-start', borderRadius:6,
-                background:selected?.id===inq.id?'rgba(37,99,235,0.1)':'transparent' }}>
-              <div style={{ width:36, height:36, borderRadius:'50%', background:'#334155',
-                display:'flex', alignItems:'center', justifyContent:'center',
-                fontWeight:700, fontSize:13, flexShrink:0 }}>
-                {(inq.sender_name||'?')[0]}
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:2 }}>
-                  <span style={{ fontWeight:600, fontSize:13 }}>{inq.sender_name}</span>
-                  <span style={{ fontSize:11, color:'#64748b' }}>
-                    {new Date(inq.created_at).toLocaleDateString('zh-HK')}
-                  </span>
-                </div>
-                <div style={{ fontSize:12, color:'#94a3b8', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                  {inq.message}
-                </div>
-                {inq.project_title && (
-                  <div style={{ fontSize:11, color:'#3b82f6', marginTop:2 }}>📁 {inq.project_title}</div>
-                )}
-              </div>
-              {!inq.is_read && (
-                <div style={{ width:8, height:8, borderRadius:'50%', background:'#3b82f6', flexShrink:0, marginTop:4 }}/>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div style={S.card}>
-          {selected ? (
-            <>
-              <div style={{ fontWeight:700, fontSize:15, marginBottom:16 }}>查詢詳情</div>
-              {[['姓名',selected.sender_name],['電話',selected.sender_phone],['電郵',selected.sender_email],['項目',selected.project_title]].filter(([,v])=>v).map(([k,v])=>(
-                <div key={k} style={{ marginBottom:12 }}>
-                  <div style={{ fontSize:11, color:'#64748b' }}>{k}</div>
-                  <div style={{ fontSize:13, marginTop:2 }}>{v}</div>
-                </div>
-              ))}
-              <div style={{ marginBottom:16 }}>
-                <div style={{ fontSize:11, color:'#64748b' }}>訊息</div>
-                <div style={{ fontSize:13, marginTop:2, background:'#0f172a', padding:10, borderRadius:8, lineHeight:1.6 }}>
-                  {selected.message}
-                </div>
-              </div>
-              <div style={{ fontSize:11, color:'#64748b' }}>
-                {new Date(selected.created_at).toLocaleString('zh-HK')}
-              </div>
-            </>
-          ) : (
-            <div style={{ color:'#475569', textAlign:'center', marginTop:60, fontSize:13 }}>← 選擇查詢查看詳情</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
+// ✅ 移除 InquiriesPage，Admin 主體清理
 export default function Admin({ onBack }) {
   const [loggedIn,   setLoggedIn]   = useState(false);
   const [view,       setView]       = useState('dashboard');
   const [projects,   setProjects]   = useState([]);
-  const [inquiries,  setInquiries]  = useState([]);
   const [editTarget, setEditTarget] = useState(null);
 
   useEffect(() => {
     if (!loggedIn) return;
     async function load() {
-      const [{ data:p }, { data:i }] = await Promise.all([
-        supabase.from('projects').select('*').order('sort_order'),
-        supabase.from('contact_submissions').select('*').order('created_at', { ascending:false }),
-      ]);
-      if (p) setProjects(p);
-      if (i) setInquiries(i);
+      const { data } = await supabase.from('projects').select('*').order('sort_order');
+      if (data) setProjects(data);
     }
     load();
   }, [loggedIn]);
 
   if (!loggedIn) return <LoginPage onLogin={()=>setLoggedIn(true)}/>;
 
-  const activeNav = view==='projects'||view==='new'||view==='edit' ? 'projects'
-    : view==='inquiries' ? 'inquiries' : 'dashboard';
+  const activeNav = view==='projects'||view==='new'||view==='edit' ? 'projects' : 'dashboard';
+  const titles = { dashboard:'儀表板', projects:'案例管理', new:'新增案例', edit:'編輯案例' };
 
-  const titles = { dashboard:'儀表板', projects:'案例管理', inquiries:'客戶查詢', new:'新增案例', edit:'編輯案例' };
-
-  function handleEdit(p) { setEditTarget(p); setView('edit'); }
-  function handleDelete(id) { setProjects(prev=>prev.filter(p=>p.id!==id)); }
+  function handleEdit(p)       { setEditTarget(p); setView('edit'); }
+  function handleDelete(id)    { setProjects(prev=>prev.filter(p=>p.id!==id)); }
   function handleToggle(updated) { setProjects(prev=>prev.map(p=>p.id===updated.id?updated:p)); }
-  function handleMarkRead(id) { setInquiries(prev=>prev.map(i=>i.id===id?{...i,is_read:true}:i)); }
   async function handleSaved() {
     const { data } = await supabase.from('projects').select('*').order('sort_order');
     if (data) setProjects(data);
@@ -571,12 +537,6 @@ export default function Admin({ onBack }) {
                 color:        activeNav===id?'#60a5fa':'#94a3b8',
                 borderLeft:   activeNav===id?'2px solid #3b82f6':'2px solid transparent' }}>
               <Icon size={15}/> {label}
-              {id==='inquiries' && inquiries.filter(i=>!i.is_read).length > 0 && (
-                <span style={{ marginLeft:'auto', background:'#3b82f6', color:'#fff',
-                  borderRadius:10, padding:'1px 6px', fontSize:10 }}>
-                  {inquiries.filter(i=>!i.is_read).length}
-                </span>
-              )}
             </button>
           ))}
         </nav>
@@ -605,11 +565,10 @@ export default function Admin({ onBack }) {
         </header>
 
         <div style={S.content}>
-          {view==='dashboard' && <Dashboard projects={projects} inquiries={inquiries} setView={setView}/>}
+          {view==='dashboard' && <Dashboard projects={projects} setView={setView}/>}
           {view==='projects'  && <ProjectsPage projects={projects} setView={setView} onEdit={handleEdit} onDelete={handleDelete} onToggle={handleToggle}/>}
           {view==='new'       && <ProjectForm setView={setView} isEdit={false} editProject={null} onSaved={handleSaved}/>}
           {view==='edit'      && <ProjectForm setView={setView} isEdit={true}  editProject={editTarget} onSaved={handleSaved}/>}
-          {view==='inquiries' && <InquiriesPage inquiries={inquiries} onMarkRead={handleMarkRead}/>}
         </div>
       </main>
     </div>
