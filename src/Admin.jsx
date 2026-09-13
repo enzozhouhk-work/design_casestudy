@@ -5,10 +5,36 @@ import {
 } from 'lucide-react';
 import { supabase } from './supabase';
 
+// ✅ 壓縮 function
+function compressImage(file) {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx    = canvas.getContext('2d');
+    const img    = new Image();
+    img.src      = URL.createObjectURL(file);
+    img.onload   = () => {
+      const MAX = 1200;
+      let w = img.width;
+      let h = img.height;
+      if (w > MAX) { h = (h * MAX) / w; w = MAX; }
+      canvas.width  = w;
+      canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        (blob) => resolve(new File([blob], file.name, { type:'image/jpeg' })),
+        'image/jpeg',
+        0.8
+      );
+    };
+  });
+}
+
+// ✅ 上傳 function（加入壓縮）
 async function uploadImage(file) {
-  const ext = file.name.split('.').pop().toLowerCase();
+  const compressed = await compressImage(file);
+  const ext  = file.name.split('.').pop().toLowerCase();
   const name = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await supabase.storage.from('Design_case').upload(name, file);
+  const { error } = await supabase.storage.from('Design_case').upload(name, compressed);
   if (error) throw error;
   const { data: { publicUrl } } = supabase.storage.from('Design_case').getPublicUrl(name);
   return publicUrl;
